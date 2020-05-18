@@ -1,0 +1,11 @@
+{
+  "name": "ScoreDecay",
+  "version": "1.0",
+  "author": "Maria Garcia",
+  "url": "https://github.com/mariagvaliente/cortex-responders",
+  "license": "AGPL-V3",
+  "description": "Calculate score decay of an observable",
+  "dataTypeList": ["thehive:case_artifact"],
+  "command": "ScoreDecay/responder_scoreDecay.py",
+  "baseConfig": "ScoreDecay"
+}
