@@ -1,0 +1,11 @@
+{
+  "name": "Graph",
+  "version": "1.0",
+  "author": "Maria Garcia",
+  "url": "https://github.com/mariagvaliente/cortex-responders",
+  "license": "AGPL-V3",
+  "description": "Create a graph of the case",
+  "dataTypeList": ["thehive:case"],
+  "command": "CreateGraph/responder_graph.py",
+  "baseConfig": "Graph"
+}
