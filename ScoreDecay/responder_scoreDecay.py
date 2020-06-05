@@ -26,19 +26,19 @@ class scoreDecay(Responder):
       dataType = name.get('dataType')
       # Lista para almacenar la puntuacion asociada a las etiquetas
       scores_tags = []
-      # Si el observable tiene asignado una etiqueta con informacion de malicia (añadida por el analista), entonces le damos al observable una puntuacion de 4 de malicia
+      # Si el observable tiene asignado una etiqueta con informacion de malicia (añadida por el analista), entonces le damos al observable una puntuacion máxima de 5 de malicia
       if len(tags) != 0:
          for tag in tags:
              if tag.find("Score_aggregated") == -1 and tag.find("src:") == -1 and tag.find("Score_social") == -1:
-                scores_tags.append('4')
+                scores_tags.append('5.0')
+                print(scores_tags)
          if len(scores_tags) != 0:
             for s in scores_tags:
                results["AnalystTag"] = s
                
       # Si tenemos informacion proporcionada por las fuentes
-      if reports != None:
-        print(reports)
-
+      if reports:
+      
         # Obtenemos la fecha actual
         now = datetime.now()
         # Recorremos cada analizador
@@ -72,7 +72,7 @@ class scoreDecay(Responder):
                        # Para los analizadores que no proporcionen una puntuacion pero si la fecha en la que el observable fue visto por ultima vez tendremos en cuenta la aparicion de ciertas etiquetas
                        # Etiquetas: firma de malware (signature para el caso de MalwareBazaar), aparicion en alguna threatlist (threat para el caso de Onyphe) o relacion con la vulnerabilidad de heartbleed (heartbleed para el caso de Censys)
                        if taxonomy.get('predicate') == 'Signature' or taxonomy.get('predicate') == 'Threat' or taxonomy.get('predicate') == 'Heartbleed':
-                          scores.append('4')
+                          scores.append('5.0')
                        print("Diferencia de fechas en dias:" + str(deltas))
                        print("Puntuaciones base:" + str(scores))
                        # Llamamos a la funcion timeDecay para calcular el decaimiento de la puntuacion pasando como parametro la lista con las deltas, la lista de scores y el dataType de la entrada
@@ -88,9 +88,15 @@ class scoreDecay(Responder):
                score_aggregated = self.aggregationFunction(results, dataType)
         # Diccionario para devolver la respuesta en el report
         records = {"score_aggregation": str(score_aggregated)}
-      # Si no hay reports entonces asumimos que la score agregada es 0, el observable no se ha podido detectar como malicioso por ninguna fuente
+      
       else:
-        records = {"score_aggregation": str(score_aggregated)}
+        # Si no hay reports pero hay etiquetas añadidas por el analista
+        if len(tags) != 0:
+           records = {"score_aggregation": results["AnalystTag"]}
+        # Si no hay ni reports ni tags entonces asumimos que la score agregada es 0, el observable no se ha podido detectar como malicioso por ni por el analista ni por las fuentes
+        else:
+           records = {"score_aggregation": str(score_aggregated)}
+        
                
       self.report(records)
     
@@ -136,27 +142,22 @@ class scoreDecay(Responder):
       if dataType == "domain":
          for analyzer in results.keys():
              if analyzer == "Autofocus_Search_IOC_1_0":
-                weight_AF = 0.1
+                weight_AF = 0.2
                 score_AF = float(results[analyzer])
                 weights.append(weight_AF)
                 scores.append(score_AF)
-             if analyzer == "HybridAnalysis_1_0":
-                weight_HB = 0.5
-                score_HB = float(results[analyzer])
-                weights.append(weight_HB)
-                scores.append(score_HB)
              if analyzer == "Censys_1_0":
-                weight_HB = 0.1
-                score_HB = float(results[analyzer])
-                weights.append(weight_HB)
-                scores.append(score_HB)
-             if analyzer == "OTX_1_0":
                 weight_HB = 0.2
                 score_HB = float(results[analyzer])
                 weights.append(weight_HB)
                 scores.append(score_HB)
+             if analyzer == "OTXQuery_2_0":
+                weight_HB = 0.3
+                score_HB = float(results[analyzer])
+                weights.append(weight_HB)
+                scores.append(score_HB)
              if analyzer == "AnalystTag":
-                weight_analyst = 0.1
+                weight_analyst = 0.3
                 score_analyst = float(results[analyzer])
                 weights.append(weight_analyst)
                 scores.append(score_analyst)                               
@@ -167,11 +168,6 @@ class scoreDecay(Responder):
                 score_AF = float(results[analyzer])
                 weights.append(weight_AF)
                 scores.append(score_AF)
-             if analyzer == "HybridAnalysis_1_0":
-                weight_HB = 0.3
-                score_HB = float(results[analyzer])
-                weights.append(weight_HB)
-                scores.append(score_HB)
              if analyzer == "GreyNoise_2_3":
                 weight_GN = 0.1
                 score_GN = float(results[analyzer])
@@ -182,40 +178,45 @@ class scoreDecay(Responder):
                 score_CN = float(results[analyzer])
                 weights.append(weight_CN)
                 scores.append(score_CN)
-             if analyzer == "OTX_1_0":
-                weight_OTX = 0.1
+             if analyzer == "OTXQuery_2_0":
+                weight_OTX = 0.2
                 score_OTX = float(results[analyzer])
                 weights.append(weight_OTX)
                 scores.append(score_OTX)
              if analyzer == "Onyphe_Threats_1_0":
-                weight_ON = 0.1
+                weight_ON = 0.2
                 score_ON = float(results[analyzer])
                 weights.append(weight_ON)
                 scores.append(score_ON)
              if analyzer == "AnalystTag":
-                weight_analyst = 0.1
+                weight_analyst = 0.3
                 score_analyst = float(results[analyzer])
                 weights.append(weight_analyst)
                 scores.append(score_analyst)   
       elif dataType == "url":
          for analyzer in results.keys():
              if analyzer == "Urlscan_search_1_0":
-                weight_URL = 0.4
+                weight_URL = 0.3
                 score_URL = float(results[analyzer])
                 weights.append(weight_URL)
                 scores.append(score_URL)
              if analyzer == "VirusTotal_GetReport_3_1":
-                weight_VT = 0.4
+                weight_VT = 0.3
                 score_VT = float(results[analyzer])
                 weights.append(weight_VT)
                 scores.append(score_VT)
-             if analyzer == "OTX_1_0":
+             if analyzer == "OTXQuery_2_0":
+                weight_VT = 0.1
+                score_VT = float(results[analyzer])
+                weights.append(weight_VT)
+                scores.append(score_VT)
+             if analyzer == "HybridAnalysis_1_0":
                 weight_VT = 0.1
                 score_VT = float(results[analyzer])
                 weights.append(weight_VT)
                 scores.append(score_VT)
              if analyzer == "AnalystTag":
-                weight_analyst = 0.1
+                weight_analyst = 0.2
                 score_analyst = float(results[analyzer])
                 weights.append(weight_analyst)
                 scores.append(score_analyst)   
@@ -236,7 +237,7 @@ class scoreDecay(Responder):
                 score_VT = float(results[analyzer])
                 weights.append(weight_VT)
                 scores.append(score_VT)
-             if analyzer == "OTX_1_0":
+             if analyzer == "OTXQuery_2_0":
                 weight_OTX = 0.1
                 score_OTX = float(results[analyzer])
                 weights.append(weight_OTX)
@@ -250,7 +251,19 @@ class scoreDecay(Responder):
                 weight_analyst = 0.1
                 score_analyst = float(results[analyzer])
                 weights.append(weight_analyst)
-                scores.append(score_analyst)   
+                scores.append(score_analyst)
+      elif dataType == "mail":
+         for analyzer in results.keys():
+             if analyzer == "EmailRep_1_0":
+                weight_ER = 0.6
+                score_ER = float(results[analyzer])
+                weights.append(weight_ER)
+                scores.append(score_ER)
+             if analyzer == "AnalystTag":
+                weight_analyst = 0.4
+                score_analyst = float(results[analyzer])
+                weights.append(weight_analyst)
+                scores.append(score_analyst)    
       # Calculamos el producto de cada una de las scores por los pesos correspondientes
       for num1, num2 in zip(scores, weights):
           scores_weight.append(num1 * num2)

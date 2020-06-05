@@ -106,14 +106,11 @@ class createGraph(Responder):
       
       # Lista para almacenar los datos de todos los observables
       obs = []
-      # Recorremos todos los observables y guardamos en la lista el obs los datos de cada observable
+      # Recorremos todos los observables y guardamos en la lista obs los datos de cada observable
       for o in observables:
           obs.append(o.get('data'))
 
-      # Inicializamos la variable donde se guardara el score agregado del observable
-      score_aggregated_obs = 0.0
-      # Inicializamos la variable donde se guardara el score agegado del artifact importado procedente de un observable
-      score_aggregated_art = 0.0
+
       # Inicializamos la variable donde se guardara la relacion entre observable y artifact
       relation = ''
       # Inicializamos la variable donde se guardara el factor de propagacion de malicia
@@ -128,23 +125,24 @@ class createGraph(Responder):
 
           node_id = observable['data']
           
-          # Si el observable no esta pintado en el grafo, lo pintamos como un nodo y guardamos en score_aggregated_obs la score agregada del observable
-          # Si el observable ya esta en el grafo, no lo pintamos y solo guardamos su score agregada en score_aggregated_obs
-          if node_id not in G:
-              G.add_node(node_id)
-              G.nodes[node_id]['dataType'] = observable['dataType']
-              G.nodes[node_id]['data'] = observable['data']
-              for tag in observable['tags']:
-                  if tag.find("Score_aggregated") >= 0:
-                     score_aggregated = re.findall("[+-]?\\d+\\.\\d+", tag)
-              if len(score_aggregated) != 0:
-            	   score_aggregated_obs = score_aggregated[0]   
-          else:
-              for tag in observable['tags']:
-                  if tag.find("Score_aggregated") >= 0:
-                     score_aggregated = re.findall("[+-]?\\d+\\.\\d+", tag)
-              if len(score_aggregated) != 0:
-         	       score_aggregated_obs = score_aggregated[0] 
+          # Si el observable no esta pintado en el grafo, lo pintamos como un nodo y guardamos en score_aggregated la score agregada del observable
+          # Si el observable ya esta en el grafo, no lo pintamos y solo guardamos su score agregada en score_aggregated
+          if node_id != None:
+            if node_id not in G: 
+                G.add_node(node_id)
+                G.nodes[node_id]['dataType'] = observable['dataType']
+                G.nodes[node_id]['data'] = observable['data']
+                if G.nodes[node_id]['dataType'] not in descriptive_nodes:
+                   for tag in observable['tags']:
+                       if tag.find("Score_aggregated") >= 0:
+                          score_aggregated = re.findall("[+-]?\\d+\\.\\d+", tag)
+                          G.nodes[node_id]['score_aggregated'] = score_aggregated[0]
+            else:
+                if G.nodes[node_id]['dataType'] not in descriptive_nodes:
+                   for tag in observable['tags']:
+                       if tag.find("Score_aggregated") >= 0:
+                          score_aggregated = re.findall("[+-]?\\d+\\.\\d+", tag)
+                          G.nodes[node_id]['score_aggregated'] = score_aggregated[0]
 
           artifact_id = observable['id']
 
@@ -177,16 +175,6 @@ class createGraph(Responder):
                           if artifact['data'] and artifact['data'] in obs:
                              # Si el artifact no ha sido pintado en el grafo, lo pintamos
                              if artifact['data'] not in G:
-                                 # Aqui vamos añadiendo nodos.    
-                                 # Recorremos los observables para sacar la score agregada del artifact y guardarla en score_aggregated_art
-                                 for o in observables:
-                                     if artifact['data'] == o.get('data'):
-                                        for tag in o.get('tags'):
-                                            if tag.find("Score_aggregated") >= 0:
-                                               score_aggregated_artifact = re.findall("[+-]?\\d+\\.\\d+", tag)
-                                 if len(score_aggregated_artifact) != 0:
-                                    score_aggregated_art = score_aggregated_artifact[0]
-                                          
                                  # Añadimos el nodo
                                  G.add_node(artifact['data'], dataType=artifact['dataType'], data=artifact['data'])
                                 
@@ -207,22 +195,16 @@ class createGraph(Responder):
                                     factor = 0.5
                                  elif observable['dataType'] == 'hash' and artifact['dataType'] == 'attack_pattern':
                                     relation = 'hash-attack_pattern'
-                                    factor = 0.5
                                  elif observable['dataType'] == 'hash' and artifact['dataType'] == 'malware_family':
                                     relation = 'hash-malware_family'
-                                    factor = 1.0
                                  elif observable['dataType'] == 'hash' and artifact['dataType'] == 'campaign':
                                     relation = 'hash-campaign'
-                                    factor = 1.0
                                  elif observable['dataType'] == 'hash' and artifact['dataType'] == 'vulnerability':
                                     relation = 'hash-vulnerability'
-                                    factor = 1.0
                                  elif observable['dataType'] == 'hash' and artifact['dataType'] == 'exploit':
                                     relation = 'hash-exploit'
-                                    factor = 0.5
                                  elif observable['dataType'] == 'hash' and artifact['dataType'] == 'threat_actor':
-                                    relation = 'hash-threat_actor'
-                                    factor = 0.5                         
+                                    relation = 'hash-threat_actor'       
                                  elif observable['dataType'] == 'domain' and artifact['dataType'] == 'domain':
                                     relation = 'domain-domain'
                                     factor = 0.3
@@ -265,21 +247,9 @@ class createGraph(Responder):
                                  elif observable['dataType'] == 'email' and artifact['dataType'] == 'domain':
                                     relation = 'email-domain'
                                     factor = 0.6
-                                 # Recorremos los observables para sacar la score agregada del artifact y guardarla en score_aggregated_art
-                                 for o in observables:
-                                     if artifact['data'] == o.get('data'):
-                                        for tag in o.get('tags'):
-                                            if tag.find("Score_aggregated") >= 0:
-                                               score_aggregated_artifact = re.findall("[+-]?\\d+\\.\\d+", tag)
-                                     if len(score_aggregated_artifact) != 0:
-                                        score_aggregated_art = score_aggregated_artifact[0]
-                                   
-                                 # Finalmente añadimos la arista
-                                 # Si la relacion es una tecnica, familia de malware, campaña, exploit o vulnerabilidad añadimos la arista sin tener en cuenta puntuaciones (ya que estos observables no se pueden analizar con ningun analizador)
-                                 if relation == 'hash-attack_pattern' or relation == 'hash-malware_family' or relation == 'hash-campaign' or relation == 'hash-vulnerability' or relation == 'hash-threat_actor':
-                                    G.add_edge(node_id, artifact['data'], relation=relation)
-                                 else:
-                                    G.add_edge(node_id, artifact['data'], score_observable=score_aggregated_obs, score_artifact=score_aggregated_art, relation=relation, factor=factor)
+
+                                 # Añadimos la arista
+                                 G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
                                 
                                 
                       except AttributeError:
@@ -290,73 +260,115 @@ class createGraph(Responder):
                           continue
 
 
-      # A continuacion vamos a calcular la puntuacion social asociada a los artefactos relacionados con los observables y vamos a enviar esta puntuacion en forma de etiqueta a la plataforma The Hive
-      # Inicializamos la lista arts donde se van a guardar los artefactos que tienen relacion con algun observable
-      arts = []
-      # Recorremos todas las aristas y guardamos el valor de cada artefacto en la lista arts
-      for u,v,data in G.edges(data=True):
-          arts.append(v)
-      # Ahora necesitamos obtener los artefactos que contienen mas de una relacion con observables. Para ello, recorremos la lista arts y guardamos en la lista repeats los artefactos repetidos, ya que indican que dicho artefacto
-      # tiene varias relaciones con varios observables
-      # Inicicializamos la lista repeats donde se van a guardar los artefactos repetidos
-      repeats = []
-      # Recorremos la lista arts y guardamos los artefactos repetidos en repeats
-      for a in arts:
-          if arts.count(a) > 1:
-             if a not in repeats:
-                repeats.append(a)
-      # Para cada uno de los artefactos de la lista repetidos, vamos a obtener sus puntuaciones asociadas (scores_artifact), las distintas puntuaciones de los observables con los que se relaciona (scores_observable) y los factores de propagacion de malicia que dependen de cada una de las relaciones entre ellos (factors)
-      for i in repeats:
-          scores_obs = []
-          scores_art = []
-          factors = []
-          for u,v,data in G.edges(data=True):
-              if v == i:
-                 if data['relation'] == 'hash-attack_pattern' or data['relation'] == 'hash-malware_family' or data['relation'] == 'hash-campaign' or data['relation'] == 'hash-vulnerability' or data['relation'] == 'hash-threat_actor':
-                    print("No se tiene en cuenta para la puntuacion social")
-                 else:
-                    scores_obs.append(data.get('score_observable'))
-                    scores_art.append(data.get('score_artifact'))
-                    factors.append(data.get('factor'))
-          if len(factors) != 0 and len(scores_obs) != 0 and len(scores_art) != 0:
-             score_social = self.scoreSocialMore(factors,scores_obs,scores_art)
-             for u,v,data in G.edges(data=True):
-                 if v == i:
-                    # Actualizamos la arista añadiendo la puntuacion social
-                    G[u][v]['score_social'] = score_social
-             for o in observables:
-                 if i == o.get('data'):
-                    tags = []
-                    for tag in o.get('tags'):
-                        tags.append(tag)
-                    social = "Score_social: " + str(score_social)
-                    tags.append(social)
-                    data = json.dumps({"tags": tags})
-                    req = THE_HIVE_URL + "/api/case/artifact/" + str(o['_id'])
-                    headers = {'Authorization': 'Bearer {}'.format(THE_HIVE_API_KEY), 'Content-Type': 'application/json'}
-                    response = requests.patch(req, headers=headers, data=data)
-    
-      # Para el resto de los artefactos, es decir los que solo tienen una relacion con algun observable, recorremos las aristas y de cada artefacto sacamos el factor de propagacion, la puntuacion del artefacto y la puntuacion del observable asociado y los pasamos como parametros a la funcion scoreSocialOne para calcular la puntuacion social
-      for u,v,data in G.edges(data=True):
-          if v not in repeats:
-             if data['relation'] == 'hash-attack_pattern' or data['relation'] == 'hash-malware_family' or data['relation'] == 'hash-campaign' or data['relation'] == 'hash-vulnerability' or data['relation'] == 'hash-threat_actor':
-                print("No se tiene en cuenta para la puntuacion social")
-             else:
-                score_social = self.scoreSocialOne(data['factor'], data['score_observable'], data['score_artifact'])
-                # Actualizamos la arista añadiendo la puntuacion social
-                G[u][v]['score_social'] = score_social
-                # Por ultimo, recorremos todos los observables y cuando el observable sea igual al artefacto i de la lista repetidos, obtenemos sus etiquetas y generamos una nueva con la puntuacion social asociada
-                for o in observables:
-                    if v == o.get('data'):
-                       tags = []
-                       for tag in o.get('tags'):
-                           tags.append(tag)
-                       social = "Score_social: " + str(score_social)
-                       tags.append(social)
-                       data = json.dumps({"tags": tags})
-                       req = THE_HIVE_URL + "/api/case/artifact/" + str(o['_id'])
-                       headers = {'Authorization': 'Bearer {}'.format(THE_HIVE_API_KEY), 'Content-Type': 'application/json'}
-                       response = requests.patch(req, headers=headers, data=data)
+	    # Recorremos todos los nodos del grafo
+	    for node in G.nodes():
+	        scores_level_0 = []
+	        factors_level_0 = []
+	        scores_neighbors_level_1 = []
+	        factors_neighbors_level_1 = []
+	        scores_neighbors_level_2 = []
+	        factors_neighbors_level_2 = []
+	        
+	        # Si el nodo no pertecene al grupo de nodos descriptivos
+	        if G.nodes[node]['dataType'] not in descriptive_nodes:
+	            # Extraemos la puntuacion agregada del nodo
+	            score_node = G.nodes[node]['score_aggregated']
+	            # Extraemos los nodos predecesores
+	            predecessors = list(G.predecessors(node))
+	            # Si existen nodos predecesores, calculamos la primera puntuacion social asociada al nodo
+	            if len(predecessors) != 0:
+	                # Recorremos todos los nodos predecesores
+	                for predecessor in predecessors:
+	                    # Guardamos la puntuacion agregada de cada nodo predecesor
+	                    score_aggregated=G.nodes[predecessor]['score_aggregated']
+	                    scores_level_0.append(score_aggregated)
+	                    # Guardamos el factor de propagacion asociado a la relacion entre el nodo predecesor y el nodo actual para el que estamos calculando la puntuacion social
+	                    factor = G[G.nodes[predecessor]['data']][G.nodes[node]['data']]['factor']
+	                    factors_level_0.append(factor)
+	                    # Calculamos la puntuacion social y la asociamos al nodo
+	                    score_social_0 = scoreSocial(factors_level_0,scores_level_0,score_node)
+	                    G.nodes[node]['score_social_0'] = score_social_0
+	            # Extraemos todos los vecinos (tanto predecesores como sucesores) asociados al nodo para calcular las siguientes puntuaciones sociales
+	            neighbors = list(set(list(nx.all_neighbors(G,node))))
+	            # Si existen vecinos
+	            if len(neighbors) != 0:
+	                # Recorremos todos los vecinos
+	                for neighbor in neighbors:
+	                    # De cada nodo vecino, extraemos sus nodos vecinos, es decir, los vecinos de nuestros vecino
+	                    neighbors_of_neighbors = list(set(list(nx.all_neighbors(G,neighbor))))
+	                    # Si existen nodos vecinos de nuestro vecino
+	                    if len(neighbors_of_neighbors) != 0:
+	                        # Para cada nodo vecino de nuestro vecino
+	                        for n1 in neighbors_of_neighbors:
+	                            # Si el nodo vecino de nuestro vecino no pertenece al grupo de nodos descriptivos, no coincide con el nodo actual y además no coincide con nuestro vecino, calculamos la segunda puntuacion social
+	                            if G.nodes[n1]['dataType'] not in descriptive_nodes and n1 != G.nodes[node]['data'] and n1 != neighbor:
+	                                print(n1)
+	                                # Extraemos la puntuacion agregada del nodo vecino de nuestro vecino
+	                                scores_neighbors_level_1.append(G.nodes[n1]['score_aggregated'])
+	                                # Si existe una arista entre el nodo vecino y el nodo actual, extraemos el factor de dicha relacion
+	                                if G.has_edge(neighbor,node):
+	                                    factor_neighbor_node = G[G.nodes[neighbor]['data']][G.nodes[node]['data']]['factor']
+	                                else:
+	                                    factor_neighbor_node = G[G.nodes[node]['data']][G.nodes[neighbor]['data']]['factor']
+	                                # Si existe una arista entre el nodo vecino y el vecino del nodo vecino, extraemos el factor de dicha relacion
+	                                if G.has_edge(neighbor,n1):
+	                                    factor_neighbor_neighbor = G[G.nodes[neighbor]['data']][G.nodes[n1]['data']]['factor']
+	                                else:
+	                                    factor_neighbor_neighbor = G[G.nodes[n1]['data']][G.nodes[neighbor]['data']]['factor']
+
+	                                # Multiplicamos dichos factores
+	                                factor_mult = factor_neighbor_node * factor_neighbor_neighbor
+	                                factors_neighbors_level_1.append(factor_mult)
+	                                # Calculamos la segunda puntuacion social asociada al nodo actual influida por los nodos vecinos de sus vecinos
+	                                score_social_1 = scoreSocial(factors_neighbors_level_1,scores_neighbors_level_1,score_node)
+	                                G.nodes[node]['score_social_1'] = score_social_1
+
+	                                # Extraemos todos los vecinos de los nodos vecinos de nuestros vecinos
+	                                neighbors_of_neighbors_of_neighbors = list(set(list(nx.all_neighbors(G,n1))))
+	                                # Si existen vecinos de los vecinos de nuestros vecinos
+	                                if len(neighbors_of_neighbors_of_neighbors) != 0:
+	                                    # Recorremos los nodos
+	                                    for n2 in neighbors_of_neighbors_of_neighbors:
+	                                        # Si el nodo no pertenece al grupo de nodos descriptivos, no coincide con el nodo actual y además no coincide ni con nuestro vecino ni con el vecino de nuestro vecino, calculamos la segunda puntuacion social
+	                                        if G.nodes[n2]['dataType'] not in descriptive_nodes and n2 != G.nodes[node]['data'] and n2 != neighbor and n2 != n1:
+	                                            # Extraemos la puntuacion social del nodo
+	                                            scores_neighbors_level_2.append(G.nodes[n2]['score_aggregated'])
+	                                            # Si existe una arista entre el nodo vecino y el nodo actual, extraemos el factor de dicha relacion
+	                                            if G.has_edge(neighbor,node):
+	                                                factor_neighbor_node = G[G.nodes[neighbor]['data']][G.nodes[node]['data']]['factor']
+	                                            else:
+	                                                factor_neighbor_node = G[G.nodes[node]['data']][G.nodes[neighbor]['data']]['factor']
+	                                            # Si existe una arista entre el nodo vecino y vecino del nodo vecino, extraemos el factor de dicha relacion
+	                                            if G.has_edge(neighbor,n1):
+	                                                factor_neighbor_neighbor_1 = G[G.nodes[neighbor]['data']][G.nodes[n1]['data']]['factor']
+	                                            else:
+	                                                factor_neighbor_neighbor_1 = G[G.nodes[n1]['data']][G.nodes[neighbor]['data']]['factor']
+	                                            # Si existe una arista entre el vecino del vecino del nodo vecino y el vecino del nodo vecino, extraemos el factor de dicha relacion
+	                                            if G.has_edge(n1,n2):
+	                                                factor_neighbor_neighbor_2 = G[G.nodes[n1]['data']][G.nodes[n2]['data']]['factor']
+	                                            else:
+	                                                factor_neighbor_neighbor_2 = G[G.nodes[n2]['data']][G.nodes[n1]['data']]['factor']
+
+	                                            # Multiplicamos los factores
+	                                            factor_mult = factor_neighbor_node * factor_neighbor_neighbor_1 * factor_neighbor_neighbor_2
+	                                            factors_neighbors_level_2.append(factor_mult)
+	                                            # Calculamos la tercera puntuacion social asociada al nodo actual influida en este caso por los nodos vecinos de los vecinos de sus vecinos
+	                                            score_social_2 = scoreSocial(factors_neighbors_level_2,scores_neighbors_level_2,score_node)
+	                                            G.nodes[node]['score_social_2'] = score_social_2
+
+
+	        # Por ultimo, recorremos todos los observables y cuando el observable sea igual al nodo, obtenemos sus etiquetas y generamos una nueva con la puntuacion social asociada
+	        # for o in observables:
+	        #     if G.nodes[node]['data'] == o.get('data'):
+	        #        tags = []
+	        #        for tag in o.get('tags'):
+	        #            tags.append(tag)
+	        #        social = "Score_social: " + str(score_social)
+	        #        tags.append(social)
+	        #        data = json.dumps({"tags": tags})
+	        #        req = THE_HIVE_URL + "/api/case/artifact/" + str(o['_id'])
+	        #        headers = {'Authorization': 'Bearer {}'.format(THE_HIVE_API_KEY), 'Content-Type': 'application/json'}
+	        #        response = requests.patch(req, headers=headers, data=data)
         
 
       # Aqui definimos los colores de los distintos tipos de nodo para networkx
@@ -430,27 +442,20 @@ class createGraph(Responder):
          print('createAlert() Error: ' + str(response.status_code))
          return None
          
-  # Funcion para calcular la score social asociada a un artifact con solo una relacion con algun observable
-  def scoreSocialOne(self, factor, score_aggregated_obs, score_aggregated_art):
-    	div = (float(factor) * float(score_aggregated_obs))/5
-    	mult = (5 - float(score_aggregated_art)) * div
-    	result = float(score_aggregated_art) + mult
-    	return result
-     
-  # Funcion para calcular la score social asociada a un artifact con varias relaciones con observables
-  def scoreSocialMore(self, factors, scores_obs, scores_art):
-      print(factors)
+  # Funcion para calcular la puntuacion social asociada a un nodo
+  def scoreSocial(factors, scores, score_node):
       d = 0
       div = 0
-      for s in scores_obs:
+      for s in scores:
           d = d + 5
-      for s,f in zip(scores_obs, factors):
+
+      factors = list(map(str, factors))
+      for s,f in zip(scores, factors):
           div = div + (float(f) * float(s))
-  
+
       div = div/d
-      mult = (5 - float(scores_art[0])) * div
-      result = float(scores_art[0]) + mult
-      print(result)
+      mult = (5 - float(score_node)) * div
+      result = float(score_node) + mult
       return result
 
 
