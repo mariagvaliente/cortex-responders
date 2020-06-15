@@ -19,7 +19,7 @@ class scoreDecay(Responder):
       # Extraemos los reports
       reports = name.get('reports')
       # Inicializamos la variable score_aggregated donde se va a guardar el valor de la puntuacion agregada por las distintas fuentes
-      score_aggregated = 0.0
+      score_aggregated = "{:.2f}".format(0.00)
       # Diccionario para almacenar los resultados que se enviaran a la funcion de agregacion
       results = {}
       # Extraemos el tipo de dato de entrada
@@ -76,14 +76,17 @@ class scoreDecay(Responder):
                        print("Diferencia de fechas en dias:" + str(deltas))
                        print("Puntuaciones base:" + str(scores))
                        # Llamamos a la funcion timeDecay para calcular el decaimiento de la puntuacion pasando como parametro la lista con las deltas, la lista de scores y el dataType de la entrada
-                       scores_decay = self.timeDecay(deltas, scores, dataType)
-                       for a,s in zip(analyzers, scores_decay):
-                           results[a] = str(s)
-                       print(results)
+                       if len(scores) != 0 and len(deltas) != 0:
+                          print("entra1")
+                          scores_decay = self.timeDecay(deltas, scores, dataType)
+                          for a,s in zip(analyzers, scores_decay):
+                              results[a] = str(s)
+                          print(results)
             
                            
             # Si tenemos puntuaciones de decaimiento o puntuaciones de etiquetas entonces podemos calcular la puntuacion agregada
             if len(scores_decay) != 0 or len(scores_tags) != 0:
+               print("entra2")
                # Llamamos a la funcion aggregationFunction para calcular la puntuación agregada por todas las fuentes
                score_aggregated = self.aggregationFunction(results, dataType)
         # Diccionario para devolver la respuesta en el report
@@ -279,7 +282,10 @@ class scoreDecay(Responder):
       # Calculamos la funcion de agregacion dividiendo las sumas anteriores
       score_aggregated = sum_scores_weight/sum_weights
       
-      return score_aggregated
+      # Reducimos el numero de decimales a 2
+      result = "{:.2f}".format(score_aggregated)
+      
+      return result
   
 
   def operations(self,raw):

@@ -8,30 +8,17 @@ import base64
 import magic
 
 from thehive4py.api import TheHiveApi
-from thehive4py.query import *
-from thehive4py.models import AlertArtifact
-from thehive4py.models import Alert
 
 from cortex4py.api import Api
+
+from thehive_config import THE_HIVE_API_KEY, CORTEX_API_KEY, THE_HIVE_URL, CORTEX_URL
 
 import sys
 import json
 import re
+import os
 
 import networkx as nx
-import matplotlib.pyplot as plt
-
-from thehive_config import THE_HIVE_API_KEY, CORTEX_API_KEY, THE_HIVE_URL, CORTEX_URL
-
-import os
-from datetime import datetime
-
-from dateutil.parser import parse
-
-import tempfile
-import pathlib
-import ntpath
-from shutil import copyfileobj
 
 api = TheHiveApi(THE_HIVE_URL, THE_HIVE_API_KEY)
 cortex_api = Api(CORTEX_URL, CORTEX_API_KEY)
@@ -102,7 +89,7 @@ class createGraph(Responder):
           print('get_case_observables() Error: ' + response.content)
           exit(1)
 
-      print(json.dumps(response.json(), indent=4, sort_keys=True))
+      #print(json.dumps(response.json(), indent=4, sort_keys=True))
       
       # Lista para almacenar los datos de todos los observables
       obs = []
@@ -110,11 +97,13 @@ class createGraph(Responder):
       for o in observables:
           obs.append(o.get('data'))
 
-
       # Inicializamos la variable donde se guardara la relacion entre observable y artifact
       relation = ''
       # Inicializamos la variable donde se guardara el factor de propagacion de malicia
       factor = 0.0
+      # Grupo de nodos con los que solo se establece relacion pero no se calcula ninguna puntuacion
+      descriptive_nodes = ["attack_pattern", "malware_family", "campaign", "exploit", "vulnerability", "threat_actor"]
+      
       
       for observable in observables:
           # Dentro de cada observable recorremos los reports
@@ -177,243 +166,184 @@ class createGraph(Responder):
                              if artifact['data'] not in G:
                                  # Añadimos el nodo
                                  G.add_node(artifact['data'], dataType=artifact['dataType'], data=artifact['data'])
-                                
-                             # Comprobamos el artifact asociado al observable no es igual al observable, ya que si fueran iguales estariamos estableciendo una arista consigo mismo
+
+                             # Si el artifact no es a su vez el observable (para evitar relaciones con uno mismo), se añade una arista con la relacion y el factor de propagacion asociado
                              if artifact['data'] != observable['data']:
-                               # Establecemos la relacion entre el observable y el artifact, y guardamos el factor de propagacion de malignidad en funcion del tipo de relacion
-                                 if observable['dataType'] == 'hash' and artifact['dataType'] == 'domain':
-                                    relation = 'hash-domain'
-                                    factor = 1.0
-                                 elif observable['dataType'] == 'hash' and artifact['dataType'] == 'ip':
-                                    relation = 'hash-ip'
-                                    factor = 1.0
-                                 elif observable['dataType'] == 'hash' and artifact['dataType'] == 'url':
-                                    relation = 'hash-url'
-                                    factor = 1.0
-                                 elif observable['dataType'] == 'hash' and artifact['dataType'] == 'hash':
-                                    relation = 'hash-hash'
-                                    factor = 0.5
-                                 elif observable['dataType'] == 'hash' and artifact['dataType'] == 'attack_pattern':
-                                    relation = 'hash-attack_pattern'
-                                 elif observable['dataType'] == 'hash' and artifact['dataType'] == 'malware_family':
-                                    relation = 'hash-malware_family'
-                                 elif observable['dataType'] == 'hash' and artifact['dataType'] == 'campaign':
-                                    relation = 'hash-campaign'
-                                 elif observable['dataType'] == 'hash' and artifact['dataType'] == 'vulnerability':
-                                    relation = 'hash-vulnerability'
-                                 elif observable['dataType'] == 'hash' and artifact['dataType'] == 'exploit':
-                                    relation = 'hash-exploit'
-                                 elif observable['dataType'] == 'hash' and artifact['dataType'] == 'threat_actor':
-                                    relation = 'hash-threat_actor'       
-                                 elif observable['dataType'] == 'domain' and artifact['dataType'] == 'domain':
-                                    relation = 'domain-domain'
-                                    factor = 0.3
-                                 elif observable['dataType'] == 'domain' and artifact['dataType'] == 'ip':
-                                    relation = 'domain-ip'
-                                    factor = 0.6
-                                 elif observable['dataType'] == 'domain' and artifact['dataType'] == 'hash':
-                                    relation = 'domain-hash'
-                                    factor = 1.0
-                                 elif observable['dataType'] == 'domain' and artifact['dataType'] == 'url':
-                                    relation = 'domain-url'
-                                    factor = 0.6
-                                 elif observable['dataType'] == 'domain' and artifact['dataType'] == 'filename':
-                                    relation = 'domain-file'
-                                    factor = 1.0
-                                 elif observable['dataType'] == 'ip' and artifact['dataType'] == 'domain':
-                                    relation = 'ip-domain'
-                                    factor = 0.6
-                                 elif observable['dataType'] == 'ip' and artifact['dataType'] == 'hash':
-                                    relation = 'ip-hash'
-                                    factor = 1.0
-                                 elif observable['dataType'] == 'ip' and artifact['dataType'] == 'url':
-                                    relation = 'ip-url'
-                                    factor = 0.6
-                                 elif observable['dataType'] == 'ip' and artifact['dataType'] == 'filename':
-                                    relation = 'ip-file'
-                                    factor = 1.0
-                                 elif observable['dataType'] == 'url' and artifact['dataType'] == 'domain':
-                                    relation = 'url-domain'
-                                    factor = 0.6
-                                 elif observable['dataType'] == 'url' and artifact['dataType'] == 'ip':
-                                    relation = 'url-ip'
-                                    factor = 0.6
-                                 elif observable['dataType'] == 'url' and artifact['dataType'] == 'hash':
-                                    relation = 'url-hash'
-                                    factor = 1.0
-                                 elif observable['dataType'] == 'url' and artifact['dataType'] == 'filename':
-                                    relation = 'url-file'
-                                    factor = 1.0
-                                 elif observable['dataType'] == 'email' and artifact['dataType'] == 'domain':
-                                    relation = 'email-domain'
-                                    factor = 0.6
+                                if observable['dataType'] == 'hash' and artifact['dataType'] == 'domain':
+                                   relation = 'hash-domain'
+                                   factor = 1.0
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'hash' and artifact['dataType'] == 'ip':
+                                   relation = 'hash-ip'
+                                   factor = 1.0
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'hash' and artifact['dataType'] == 'url':
+                                   relation = 'hash-url'
+                                   factor = 1.0
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'hash' and artifact['dataType'] == 'hash':
+                                   relation = 'hash-hash'
+                                   factor = 0.5
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'hash' and artifact['dataType'] == 'filename':
+                                   relation = 'hash-file'
+                                   factor = 0.5
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'hash' and artifact['dataType'] == 'attack_pattern':
+                                   relation = 'hash-attack_pattern'
+                                   G.add_edge(node_id, artifact['data'], relation=relation)
+                                elif observable['dataType'] == 'hash' and artifact['dataType'] == 'malware_family':
+                                   relation = 'hash-malware_family'
+                                   G.add_edge(node_id, artifact['data'], relation=relation)
+                                elif observable['dataType'] == 'hash' and artifact['dataType'] == 'campaign':
+                                   relation = 'hash-campaign'
+                                   G.add_edge(node_id, artifact['data'], relation=relation)
+                                elif observable['dataType'] == 'hash' and artifact['dataType'] == 'vulnerability':
+                                   relation = 'hash-vulnerability'
+                                   G.add_edge(node_id, artifact['data'], relation=relation)
+                                elif observable['dataType'] == 'hash' and artifact['dataType'] == 'exploit':
+                                   relation = 'hash-exploit'
+                                   G.add_edge(node_id, artifact['data'], relation=relation)
+                                elif observable['dataType'] == 'hash' and artifact['dataType'] == 'threat_actor':
+                                   relation = 'hash-threat_actor'    
+                                   G.add_edge(node_id, artifact['data'], relation=relation)       
+                                elif observable['dataType'] == 'domain' and artifact['dataType'] == 'domain':
+                                   relation = 'domain-domain'
+                                   factor = 0.3
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'domain' and artifact['dataType'] == 'ip':
+                                   relation = 'domain-ip'
+                                   factor = 0.6
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'domain' and artifact['dataType'] == 'hash':
+                                   relation = 'domain-hash'
+                                   factor = 1.0
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'domain' and artifact['dataType'] == 'url':
+                                   relation = 'domain-url'
+                                   factor = 0.6
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'ip' and artifact['dataType'] == 'domain':
+                                   relation = 'ip-domain'
+                                   factor = 0.6
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'ip' and artifact['dataType'] == 'hash':
+                                   relation = 'ip-hash'
+                                   factor = 1.0
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'ip' and artifact['dataType'] == 'url':
+                                   relation = 'ip-url'
+                                   factor = 0.6
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'url' and artifact['dataType'] == 'domain':
+                                   relation = 'url-domain'
+                                   factor = 0.6
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'url' and artifact['dataType'] == 'ip':
+                                   relation = 'url-ip'
+                                   factor = 0.6
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'url' and artifact['dataType'] == 'hash':
+                                   relation = 'url-hash'
+                                   factor = 1.0
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'url' and artifact['dataType'] == 'filename':
+                                   relation = 'url-file'
+                                   factor = 1.0
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
+                                elif observable['dataType'] == 'email' and artifact['dataType'] == 'domain':
+                                   relation = 'email-domain'
+                                   factor = 0.6
+                                   G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)                              
+                               
 
-                                 # Añadimos la arista
-                                 G.add_edge(node_id, artifact['data'], relation=relation, factor=factor)
-                                
-                                
                       except AttributeError:
-
-                          # Hay algunos casos en que no existe el atributo data: los ignoramos
-
-                          print("Attribute Error: " + str(artifact))
-                          continue
-
-
-	    # Recorremos todos los nodos del grafo
-	    for node in G.nodes():
-	        scores_level_0 = []
-	        factors_level_0 = []
-	        scores_neighbors_level_1 = []
-	        factors_neighbors_level_1 = []
-	        scores_neighbors_level_2 = []
-	        factors_neighbors_level_2 = []
-	        
-	        # Si el nodo no pertecene al grupo de nodos descriptivos
-	        if G.nodes[node]['dataType'] not in descriptive_nodes:
-	            # Extraemos la puntuacion agregada del nodo
-	            score_node = G.nodes[node]['score_aggregated']
-	            # Extraemos los nodos predecesores
-	            predecessors = list(G.predecessors(node))
-	            # Si existen nodos predecesores, calculamos la primera puntuacion social asociada al nodo
-	            if len(predecessors) != 0:
-	                # Recorremos todos los nodos predecesores
-	                for predecessor in predecessors:
-	                    # Guardamos la puntuacion agregada de cada nodo predecesor
-	                    score_aggregated=G.nodes[predecessor]['score_aggregated']
-	                    scores_level_0.append(score_aggregated)
-	                    # Guardamos el factor de propagacion asociado a la relacion entre el nodo predecesor y el nodo actual para el que estamos calculando la puntuacion social
-	                    factor = G[G.nodes[predecessor]['data']][G.nodes[node]['data']]['factor']
-	                    factors_level_0.append(factor)
-	                    # Calculamos la puntuacion social y la asociamos al nodo
-	                    score_social_0 = scoreSocial(factors_level_0,scores_level_0,score_node)
-	                    G.nodes[node]['score_social_0'] = score_social_0
-	            # Extraemos todos los vecinos (tanto predecesores como sucesores) asociados al nodo para calcular las siguientes puntuaciones sociales
-	            neighbors = list(set(list(nx.all_neighbors(G,node))))
-	            # Si existen vecinos
-	            if len(neighbors) != 0:
-	                # Recorremos todos los vecinos
-	                for neighbor in neighbors:
-	                    # De cada nodo vecino, extraemos sus nodos vecinos, es decir, los vecinos de nuestros vecino
-	                    neighbors_of_neighbors = list(set(list(nx.all_neighbors(G,neighbor))))
-	                    # Si existen nodos vecinos de nuestro vecino
-	                    if len(neighbors_of_neighbors) != 0:
-	                        # Para cada nodo vecino de nuestro vecino
-	                        for n1 in neighbors_of_neighbors:
-	                            # Si el nodo vecino de nuestro vecino no pertenece al grupo de nodos descriptivos, no coincide con el nodo actual y además no coincide con nuestro vecino, calculamos la segunda puntuacion social
-	                            if G.nodes[n1]['dataType'] not in descriptive_nodes and n1 != G.nodes[node]['data'] and n1 != neighbor:
-	                                print(n1)
-	                                # Extraemos la puntuacion agregada del nodo vecino de nuestro vecino
-	                                scores_neighbors_level_1.append(G.nodes[n1]['score_aggregated'])
-	                                # Si existe una arista entre el nodo vecino y el nodo actual, extraemos el factor de dicha relacion
-	                                if G.has_edge(neighbor,node):
-	                                    factor_neighbor_node = G[G.nodes[neighbor]['data']][G.nodes[node]['data']]['factor']
-	                                else:
-	                                    factor_neighbor_node = G[G.nodes[node]['data']][G.nodes[neighbor]['data']]['factor']
-	                                # Si existe una arista entre el nodo vecino y el vecino del nodo vecino, extraemos el factor de dicha relacion
-	                                if G.has_edge(neighbor,n1):
-	                                    factor_neighbor_neighbor = G[G.nodes[neighbor]['data']][G.nodes[n1]['data']]['factor']
-	                                else:
-	                                    factor_neighbor_neighbor = G[G.nodes[n1]['data']][G.nodes[neighbor]['data']]['factor']
-
-	                                # Multiplicamos dichos factores
-	                                factor_mult = factor_neighbor_node * factor_neighbor_neighbor
-	                                factors_neighbors_level_1.append(factor_mult)
-	                                # Calculamos la segunda puntuacion social asociada al nodo actual influida por los nodos vecinos de sus vecinos
-	                                score_social_1 = scoreSocial(factors_neighbors_level_1,scores_neighbors_level_1,score_node)
-	                                G.nodes[node]['score_social_1'] = score_social_1
-
-	                                # Extraemos todos los vecinos de los nodos vecinos de nuestros vecinos
-	                                neighbors_of_neighbors_of_neighbors = list(set(list(nx.all_neighbors(G,n1))))
-	                                # Si existen vecinos de los vecinos de nuestros vecinos
-	                                if len(neighbors_of_neighbors_of_neighbors) != 0:
-	                                    # Recorremos los nodos
-	                                    for n2 in neighbors_of_neighbors_of_neighbors:
-	                                        # Si el nodo no pertenece al grupo de nodos descriptivos, no coincide con el nodo actual y además no coincide ni con nuestro vecino ni con el vecino de nuestro vecino, calculamos la segunda puntuacion social
-	                                        if G.nodes[n2]['dataType'] not in descriptive_nodes and n2 != G.nodes[node]['data'] and n2 != neighbor and n2 != n1:
-	                                            # Extraemos la puntuacion social del nodo
-	                                            scores_neighbors_level_2.append(G.nodes[n2]['score_aggregated'])
-	                                            # Si existe una arista entre el nodo vecino y el nodo actual, extraemos el factor de dicha relacion
-	                                            if G.has_edge(neighbor,node):
-	                                                factor_neighbor_node = G[G.nodes[neighbor]['data']][G.nodes[node]['data']]['factor']
-	                                            else:
-	                                                factor_neighbor_node = G[G.nodes[node]['data']][G.nodes[neighbor]['data']]['factor']
-	                                            # Si existe una arista entre el nodo vecino y vecino del nodo vecino, extraemos el factor de dicha relacion
-	                                            if G.has_edge(neighbor,n1):
-	                                                factor_neighbor_neighbor_1 = G[G.nodes[neighbor]['data']][G.nodes[n1]['data']]['factor']
-	                                            else:
-	                                                factor_neighbor_neighbor_1 = G[G.nodes[n1]['data']][G.nodes[neighbor]['data']]['factor']
-	                                            # Si existe una arista entre el vecino del vecino del nodo vecino y el vecino del nodo vecino, extraemos el factor de dicha relacion
-	                                            if G.has_edge(n1,n2):
-	                                                factor_neighbor_neighbor_2 = G[G.nodes[n1]['data']][G.nodes[n2]['data']]['factor']
-	                                            else:
-	                                                factor_neighbor_neighbor_2 = G[G.nodes[n2]['data']][G.nodes[n1]['data']]['factor']
-
-	                                            # Multiplicamos los factores
-	                                            factor_mult = factor_neighbor_node * factor_neighbor_neighbor_1 * factor_neighbor_neighbor_2
-	                                            factors_neighbors_level_2.append(factor_mult)
-	                                            # Calculamos la tercera puntuacion social asociada al nodo actual influida en este caso por los nodos vecinos de los vecinos de sus vecinos
-	                                            score_social_2 = scoreSocial(factors_neighbors_level_2,scores_neighbors_level_2,score_node)
-	                                            G.nodes[node]['score_social_2'] = score_social_2
+                            '''
+                            Hay algunos casos en que no existe el atributo data: los ignoramos
+                            '''
+                            print("Attribute Error: " + str(artifact))
+                            continue
 
 
-	        # Por ultimo, recorremos todos los observables y cuando el observable sea igual al nodo, obtenemos sus etiquetas y generamos una nueva con la puntuacion social asociada
-	        # for o in observables:
-	        #     if G.nodes[node]['data'] == o.get('data'):
-	        #        tags = []
-	        #        for tag in o.get('tags'):
-	        #            tags.append(tag)
-	        #        social = "Score_social: " + str(score_social)
-	        #        tags.append(social)
-	        #        data = json.dumps({"tags": tags})
-	        #        req = THE_HIVE_URL + "/api/case/artifact/" + str(o['_id'])
-	        #        headers = {'Authorization': 'Bearer {}'.format(THE_HIVE_API_KEY), 'Content-Type': 'application/json'}
-	        #        response = requests.patch(req, headers=headers, data=data)
+      # # Recorremos todos los nodos del grafo para calcular la primera puntuacion social
+      for node in G.nodes():
+          scores_level_initial = []
+          factors_level_initial = []
+          # Si el nodo no pertecene al grupo de nodos descriptivos
+          if G.nodes[node]['dataType'] not in descriptive_nodes:
+             # Extraemos la puntuacion agregada del nodo
+             score_node = G.nodes[node]['score_aggregated']
+             # Extraemos los nodos predecesores
+             predecessors = list(G.predecessors(node))
+             # Si existen nodos predecesores, calculamos la primera puntuacion social asociada al nodo
+             if len(predecessors) != 0:
+                # Recorremos todos los nodos predecesores
+                for predecessor in predecessors:
+                    # Guardamos la puntuacion agregada de cada nodo predecesor
+                    score_aggregated=G.nodes[predecessor]['score_aggregated']
+                    scores_level_initial.append(score_aggregated)
+                    # Guardamos el factor de propagacion asociado a la relacion entre el nodo predecesor y el nodo actual para el que estamos calculando la puntuacion social
+                    factor = G[G.nodes[predecessor]['data']][G.nodes[node]['data']]['factor']
+                    factors_level_initial.append(factor)
+                    # Calculamos la puntuacion social y la asociamos al nodo
+                    score_social_initial = self.scoreSocial(factors_level_initial,scores_level_initial,score_node)
+                    G.nodes[node]['score_social'] = score_social_initial
+             else:
+                 G.nodes[node]['score_social'] = score_node
+
+      # # Recorremos todos los nodos del grafo para calcular la puntuacion social final
+      for node in G.nodes():
+          scores_level_final = []
+          factors_level_final = []
+          predecessors_of_predecessor = []
+
+          # Si el nodo no pertecene al grupo de nodos descriptivos
+          if G.nodes[node]['dataType'] not in descriptive_nodes:
+             # Extraemos los nodos predecesores
+             predecessors = list(G.predecessors(node))
+             # Extraemos los nodos predecesores de los predecesores
+             for predecessor in predecessors:
+                 new_predecessors = list(G.predecessors(predecessor))
+                 if len(new_predecessors) != 0:
+                    for p in new_predecessors:
+                       predecessors_of_predecessor.append(p)               
+
+             # Si existen nodos predecesores y los predecesores a su vez tienen predecesores, calculamos la puntuacion social final asociada al nodo
+             if len(predecessors) != 0 and len(predecessors_of_predecessor) != 0:
+                # Extraemos la puntuacion social inicial del nodo
+                score_node = G.nodes[node]['score_social']
+                # Recorremos todos los nodos predecesores
+                for predecessor in predecessors:
+                    # Guardamos la puntuacion social de cada nodo predecesor
+                    score_social_predecessor=G.nodes[predecessor]['score_social']
+                    scores_level_final.append(score_social_predecessor)
+                    # Guardamos el factor de propagacion asociado a la relacion entre el nodo predecesor y el nodo actual para el que estamos calculando la puntuacion social
+                    factor = G[G.nodes[predecessor]['data']][G.nodes[node]['data']]['factor']
+                    factors_level_final.append(factor)
+                    # Calculamos la puntuacion social y la asociamos al nodo
+                    score_social_final = self.scoreSocial(factors_level_final,scores_level_final,score_node)
+                    G.nodes[node]['score_social'] = score_social_final
+
+          # Por ultimo, recorremos todos los observables y cuando el observable sea igual al nodo, obtenemos sus etiquetas y generamos una nueva con la puntuacion social asociada
+          for o in observables:
+              if G.nodes[node]['data'] == o.get('data') and G.nodes[node]['dataType'] not in descriptive_nodes:
+                 tags = []
+                 for tag in o.get('tags'):
+                     tags.append(tag)
+                 social = "Score_social: " + str(G.nodes[node]['score_social'])
+                 tags.append(social)
+                 data = json.dumps({"tags": tags})
+                 req = THE_HIVE_URL + "/api/case/artifact/" + str(o['_id'])
+                 headers = {'Authorization': 'Bearer {}'.format(THE_HIVE_API_KEY), 'Content-Type': 'application/json'}
+                 response = requests.patch(req, headers=headers, data=data)
         
-
-      # Aqui definimos los colores de los distintos tipos de nodo para networkx
-
-      colormap = {"threat_actor": "red", "malicious_behaviour": "orange", "attack_pattern": "black",
-                  "file": "green", "hash": "white", "ip":"blue","domain":"yellow"}
-  
-      node_colors = []
-  
-      for node in G.nodes:
-          try:
-  
-              if 'dataType' in G.nodes[node]:
-                  node_colors.append(colormap[G.nodes[node]['dataType']])
-  
-          except KeyError:
-              # Si no hemos definido color, lo dejamos en negro
-
-              node_colors.append('black')
-              continue
-  
-      pos = nx.spring_layout(G)
-  
-      for node in G.nodes:
-          labels[node] = G.nodes[node]['data']
-  
-      plt.figure(figsize=(20, 14))
-  
-  
-      # https://stackoverflow.com/questions/21978487/improving-python-networkx-graph-layout
-    
-      nx.draw(G, node_color=node_colors, labels=labels, pos=nx.nx_pydot.graphviz_layout(G), \
-              node_size=1200,  linewidths=0.25, \
-              font_size=10, font_weight='bold', with_labels=True, dpi=1000)
-  
-  
   
       # Guardamos el grafo en formato Graphml
-     
       nx.write_graphml(G,"/tmp/graph.graphml")
       file_path = "/tmp/graph.graphml"
       
       # Creamos una alerta para mandar el grafo generado
       # Llamamos a la funcion createAlert() pasando como parametro en nombre del caso (case_name) y el path del fichero con el grafo (file_path)
-      
       case_name = data_case.get('title')
       self.createAlert(case_name, file_path)
       
@@ -429,7 +359,7 @@ class createGraph(Responder):
             mime = magic.Magic(mime=True).from_file(file_path)
             encoded_string = base64.b64encode(file_artifact.read())
       artifact = "{};{};{}".format(filename, mime, encoded_string.decode())
-      data = json.dumps({"title": "Graph generated", "description": "Relations between observables of a case shown in a graphml", "type": "external", "source": "graph", "sourceRef": "CreateGraph", "artifacts": [{"dataType": "file", "data": artifact, "message": "graph"}]})
+      data = json.dumps({"title": "Graph generated", "description": "Relations between observables of a case shown in a graphml", "type": "external", "source": "graph", "sourceRef": "GraphGenerated", "artifacts": [{"dataType": "file", "data": artifact, "message": "graph"}]})
       print(data)
       req = THE_HIVE_URL + "/api/alert"
       headers = {'Authorization': 'Bearer {}'.format(THE_HIVE_API_KEY), 'Content-Type': 'application/json'}
@@ -443,7 +373,7 @@ class createGraph(Responder):
          return None
          
   # Funcion para calcular la puntuacion social asociada a un nodo
-  def scoreSocial(factors, scores, score_node):
+  def scoreSocial(self, factors, scores, score_node):
       d = 0
       div = 0
       for s in scores:
@@ -456,6 +386,8 @@ class createGraph(Responder):
       div = div/d
       mult = (5 - float(score_node)) * div
       result = float(score_node) + mult
+
+      result = "{:.2f}".format(result)
       return result
 
 
