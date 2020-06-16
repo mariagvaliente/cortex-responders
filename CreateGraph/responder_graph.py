@@ -343,9 +343,8 @@ class createGraph(Responder):
       file_path = "/tmp/graph.graphml"
       
       # Creamos una alerta para mandar el grafo generado
-      # Llamamos a la funcion createAlert() pasando como parametro en nombre del caso (case_name) y el path del fichero con el grafo (file_path)
-      case_name = data_case.get('title')
-      self.createAlert(case_name, file_path)
+      # Llamamos a la funcion createAlert() pasando como parametro el path del fichero con el grafo (file_path)
+      self.createAlert(file_path)
       
       # Devolvemos el siguiente report al ejecutar el responder
       records = {"results": "An alert has been generated with the graph file"}
@@ -353,7 +352,7 @@ class createGraph(Responder):
   
 
   # Funcion para crear una alerta con un fichero asociado 
-  def createAlert(self, case_name, file_path):
+  def createAlert(self, file_path):
       with open(file_path, "rb") as file_artifact:
             filename = os.path.basename(file_path)
             mime = magic.Magic(mime=True).from_file(file_path)

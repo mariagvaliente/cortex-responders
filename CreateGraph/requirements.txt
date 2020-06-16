@@ -1,0 +1,7 @@
+cortexutils
+requests
+base64
+magic
+thehive4py
+cortex4py
+networkx
