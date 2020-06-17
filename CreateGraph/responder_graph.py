@@ -126,12 +126,20 @@ class createGraph(Responder):
                        if tag.find("Score_aggregated") >= 0:
                           score_aggregated = re.findall("[+-]?\\d+\\.\\d+", tag)
                           G.nodes[node_id]['score_aggregated'] = score_aggregated[0]
+                   try:
+                       G.nodes[node_id]['score_aggregated']
+                   except KeyError:
+                       G.nodes[node_id]['score_aggregated'] = "0.00"
             else:
                 if G.nodes[node_id]['dataType'] not in descriptive_nodes:
                    for tag in observable['tags']:
                        if tag.find("Score_aggregated") >= 0:
                           score_aggregated = re.findall("[+-]?\\d+\\.\\d+", tag)
                           G.nodes[node_id]['score_aggregated'] = score_aggregated[0]
+                   try:
+                       G.nodes[node_id]['score_aggregated']
+                   except KeyError:
+                       G.nodes[node_id]['score_aggregated'] = "0.00"
 
           artifact_id = observable['id']
 
