@@ -31,7 +31,6 @@ class scoreDecay(Responder):
          for tag in tags:
              if tag.find("Score_aggregated") == -1 and tag.find("src:") == -1 and tag.find("Score_social") == -1:
                 scores_tags.append('5.0')
-                print(scores_tags)
          if len(scores_tags) != 0:
             for s in scores_tags:
                results["AnalystTag"] = s
@@ -62,6 +61,10 @@ class scoreDecay(Responder):
                        #   Extraemos el score 
                        if taxonomy.get('predicate') == 'Score':
                           scores.append(taxonomy.get('value'))
+                       # Para los analizadores que no proporcionen una puntuacion pero si la fecha en la que el observable fue visto por ultima vez tendremos en cuenta la aparicion de ciertas etiquetas
+                       # Etiquetas: firma de malware (signature para el caso de MalwareBazaar), aparicion en alguna threatlist (threat para el caso de Onyphe) o relacion con la vulnerabilidad de heartbleed (heartbleed para el caso de Censys)
+                       if taxonomy.get('predicate') == 'Signature' or taxonomy.get('predicate') == 'Threat' or taxonomy.get('predicate') == 'Heartbleed':
+                          scores.append('5.0')
                        #   Extraemos la fecha en la que fue visto por ultima vez y calculamos la diferencia que existe entre las fecha actual y la fecha en la que fue visto por ultima vez (delta)
                        if taxonomy.get('predicate') == 'Last_seen':
                           date_last_seen = taxonomy.get('value')
@@ -69,10 +72,7 @@ class scoreDecay(Responder):
                           delta = str((now - datetime_max).days)
                           # Guardamos las deltas en una lista (deltas)
                           deltas.append(delta)
-                       # Para los analizadores que no proporcionen una puntuacion pero si la fecha en la que el observable fue visto por ultima vez tendremos en cuenta la aparicion de ciertas etiquetas
-                       # Etiquetas: firma de malware (signature para el caso de MalwareBazaar), aparicion en alguna threatlist (threat para el caso de Onyphe) o relacion con la vulnerabilidad de heartbleed (heartbleed para el caso de Censys)
-                       if taxonomy.get('predicate') == 'Signature' or taxonomy.get('predicate') == 'Threat' or taxonomy.get('predicate') == 'Heartbleed':
-                          scores.append('5.0')
+
                        print("Diferencia de fechas en dias:" + str(deltas))
                        print("Puntuaciones base:" + str(scores))
                        # Llamamos a la funcion timeDecay para calcular el decaimiento de la puntuacion pasando como parametro la lista con las deltas, la lista de scores y el dataType de la entrada
@@ -81,12 +81,10 @@ class scoreDecay(Responder):
                           scores_decay = self.timeDecay(deltas, scores, dataType)
                           for a,s in zip(analyzers, scores_decay):
                               results[a] = str(s)
-                          print(results)
             
                            
             # Si tenemos puntuaciones de decaimiento o puntuaciones de etiquetas entonces podemos calcular la puntuacion agregada
             if len(scores_decay) != 0 or len(scores_tags) != 0:
-               print("entra2")
                # Llamamos a la funcion aggregationFunction para calcular la puntuación agregada por todas las fuentes
                score_aggregated = self.aggregationFunction(results, dataType)
         # Diccionario para devolver la respuesta en el report
@@ -94,7 +92,7 @@ class scoreDecay(Responder):
       
       else:
         # Si no hay reports pero hay etiquetas añadidas por el analista
-        if len(tags) != 0:
+        if len(scores_tags) != 0:
            records = {"score_aggregation": results["AnalystTag"]}
         # Si no hay ni reports ni tags entonces asumimos que la score agregada es 0, el observable no se ha podido detectar como malicioso por ni por el analista ni por las fuentes
         else:
