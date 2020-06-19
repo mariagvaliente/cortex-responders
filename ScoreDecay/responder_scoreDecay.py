@@ -65,6 +65,9 @@ class scoreDecay(Responder):
                        # Etiquetas: firma de malware (signature para el caso de MalwareBazaar), aparicion en alguna threatlist (threat para el caso de Onyphe) o relacion con la vulnerabilidad de heartbleed (heartbleed para el caso de Censys)
                        if taxonomy.get('predicate') == 'Signature' or taxonomy.get('predicate') == 'Threat' or taxonomy.get('predicate') == 'Heartbleed':
                           scores.append('5.0')
+                       # Para el caso de que MalwareBazaar no proporcione firma pero si etiquetas con información sobre el tipo de malware, se asignara una puntuacion 5 de malicia
+                       if taxonomy.get('predicate') == 'Tag' and analyzer == "MalwareBazaar_1_0":
+                          scores.append('5.0')
                        #   Extraemos la fecha en la que fue visto por ultima vez y calculamos la diferencia que existe entre las fecha actual y la fecha en la que fue visto por ultima vez (delta)
                        if taxonomy.get('predicate') == 'Last_seen':
                           date_last_seen = taxonomy.get('value')
@@ -77,7 +80,6 @@ class scoreDecay(Responder):
                        print("Puntuaciones base:" + str(scores))
                        # Llamamos a la funcion timeDecay para calcular el decaimiento de la puntuacion pasando como parametro la lista con las deltas, la lista de scores y el dataType de la entrada
                        if len(scores) != 0 and len(deltas) != 0:
-                          print("entra1")
                           scores_decay = self.timeDecay(deltas, scores, dataType)
                           for a,s in zip(analyzers, scores_decay):
                               results[a] = str(s)
@@ -143,7 +145,7 @@ class scoreDecay(Responder):
       if dataType == "domain":
          for analyzer in results.keys():
              if analyzer == "Autofocus_Search_IOC_1_0":
-                weight_AF = 0.2
+                weight_AF = 0.3
                 score_AF = float(results[analyzer])
                 weights.append(weight_AF)
                 scores.append(score_AF)
@@ -153,7 +155,7 @@ class scoreDecay(Responder):
                 weights.append(weight_HB)
                 scores.append(score_HB)
              if analyzer == "OTXQuery_2_0":
-                weight_HB = 0.3
+                weight_HB = 0.2
                 score_HB = float(results[analyzer])
                 weights.append(weight_HB)
                 scores.append(score_HB)
@@ -165,7 +167,7 @@ class scoreDecay(Responder):
       elif dataType == "ip":
          for analyzer in results.keys():
              if analyzer == "Autofocus_Search_IOC_1_0":
-                weight_AF = 0.1
+                weight_AF = 0.2
                 score_AF = float(results[analyzer])
                 weights.append(weight_AF)
                 scores.append(score_AF)
@@ -180,7 +182,7 @@ class scoreDecay(Responder):
                 weights.append(weight_CN)
                 scores.append(score_CN)
              if analyzer == "OTXQuery_2_0":
-                weight_OTX = 0.2
+                weight_OTX = 0.1
                 score_OTX = float(results[analyzer])
                 weights.append(weight_OTX)
                 scores.append(score_OTX)
