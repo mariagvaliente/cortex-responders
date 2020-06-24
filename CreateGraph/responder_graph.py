@@ -295,9 +295,9 @@ class createGraph(Responder):
                     factors_level_initial.append(factor)
                     # Calculamos la puntuacion social y la asociamos al nodo
                     score_social_initial = self.scoreSocial(factors_level_initial,scores_level_initial,score_node)
-                    G.nodes[node]['score_social'] = score_social_initial
+                    G.nodes[node]['score_social_initial'] = score_social_initial
              else:
-                 G.nodes[node]['score_social'] = score_node
+                 G.nodes[node]['score_social_initial'] = score_node
 
       # # Recorremos todos los nodos del grafo para calcular la puntuacion social final
       for node in G.nodes():
@@ -319,18 +319,20 @@ class createGraph(Responder):
              # Si existen nodos predecesores y los predecesores a su vez tienen predecesores, calculamos la puntuacion social final asociada al nodo
              if len(predecessors) != 0 and len(predecessors_of_predecessor) != 0:
                 # Extraemos la puntuacion social inicial del nodo
-                score_node = G.nodes[node]['score_social']
+                score_node = G.nodes[node]['score_social_initial']
                 # Recorremos todos los nodos predecesores
                 for predecessor in predecessors:
                     # Guardamos la puntuacion social de cada nodo predecesor
-                    score_social_predecessor=G.nodes[predecessor]['score_social']
+                    score_social_predecessor=G.nodes[predecessor]['score_social_initial']
                     scores_level_final.append(score_social_predecessor)
                     # Guardamos el factor de propagacion asociado a la relacion entre el nodo predecesor y el nodo actual para el que estamos calculando la puntuacion social
                     factor = G[G.nodes[predecessor]['data']][G.nodes[node]['data']]['factor']
                     factors_level_final.append(factor)
                     # Calculamos la puntuacion social y la asociamos al nodo
                     score_social_final = self.scoreSocial(factors_level_final,scores_level_final,score_node)
-                    G.nodes[node]['score_social'] = score_social_final
+                    G.nodes[node]['score_social_final'] = score_social_final
+             else:
+                 G.nodes[node]['score_social_final'] = score_node
 
           # Por ultimo, recorremos todos los observables y cuando el observable sea igual al nodo, obtenemos sus etiquetas y generamos una nueva con la puntuacion social asociada
           for o in observables:
@@ -338,7 +340,7 @@ class createGraph(Responder):
                  tags = []
                  for tag in o.get('tags'):
                      tags.append(tag)
-                 social = "Score_social: " + str(G.nodes[node]['score_social'])
+                 social = "Score_social: " + str(G.nodes[node]['score_social_final'])
                  tags.append(social)
                  data = json.dumps({"tags": tags})
                  req = THE_HIVE_URL + "/api/case/artifact/" + str(o['_id'])
